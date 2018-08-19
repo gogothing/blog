@@ -1,6 +1,7 @@
 'use strict';
 
 
+
 var webdriver = require( 'selenium-webdriver' );
 var fs = require('fs');
 
@@ -27,14 +28,17 @@ setTimeout(() => {
     })
 }, 5000);
 
-
-
+//마무리 작업
 setTimeout(()=>{
-    driver.quit();
-    var str = JSON.stringify(blogList, null, '\t');
-    console.log(str);
-    fs.writeFile('tt.json', str, (err)=>{
-        console.log('쓰기 성공', err);
-    })
+    //창 종료
+    //driver.quit();
     //console.log(blogList);
+
+    //바로 스트링으로 옮긴다.
+    var str = JSON.parse(fs.readFileSync('./tt.json','utf8'));
+    //바로 열어버리기~
+    for(var len = 0; len < 12; len++){
+        driver.get(str[len]);
+    }
+    
 }, 10000);

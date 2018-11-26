@@ -13,7 +13,7 @@ lastMonth = moment(lastMonth).format('YYYY.MM');
 
 //티스토리 국내여행 블로그를 엽니다.
 (async function start() {
-    await driver.get('https://tistory.com/category/travel/abroad');
+    await driver.get('https://tistory.com/category/travel');
     console.log('loaded');
     setTimeout(loadData, 5000);
 })();
@@ -36,7 +36,10 @@ const loadData = async () => {
                 //저장할 url데이터 크롤링, 저장
                 await searchElement(urlStart);
             }
+
+            //가장 아래로 스크롤
             driver.executeScript("window.scroll(0, document.body.scrollHeight);");
+            //url인덱스 증가
             urlLast += 12;
             setTimeout(() => {
                 loadData();
@@ -61,6 +64,7 @@ const loadData = async () => {
 
     }catch(err){
         console.error('!not load', urlStart);
+        console.error("Err:", err);
         setTimeout(loadData, 2000);
     }
 
@@ -105,7 +109,7 @@ async function searchElement(index) {
     //console.log(element);
 
     //저장할 파일의 이름
-    var fileName = await moment(element['date']).format('YYYYMM') + '.json';
+    var fileName = await moment(element['date']).format('YYYYMMDD') + '.json';
     console.log('idx    :', fileName);
     console.log(element);
 
@@ -118,4 +122,6 @@ async function searchElement(index) {
     else {
         fs.appendFileSync('./URL/' + fileName, ',' + JSON.stringify(element) + '\n', 'utf8');
     }
+
+    console.log('index:', index);
 }

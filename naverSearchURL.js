@@ -73,6 +73,8 @@ async function loadData() {
             //처음 넣는다면
             if (fileList.indexOf(fileName) === -1) {
                 await fileList.push(fileName);
+                //파일을 넣기전에 월별 폴더를 만든다.
+                
                 fs.writeFileSync('./URL/' + fileName, '[\n' + JSON.stringify(element) + '\n', 'utf8');
             }
             //처음이 아닐경우

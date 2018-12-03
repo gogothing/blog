@@ -84,9 +84,9 @@ if (fs.existsSync(yesterdayFilePath)) {
 
 
 //페이지를 열어서 시작한다.
-var pageNum = 41;
+var pageNum = 1;
 function openPage() {
-    driver.get('https://section.blog.naver.com/ThemePost.nhn?directoryNo=27&activeDirectorySeq=3&currentPage=' + pageNum);
+    driver.get('https://section.blog.naver.com/ThemePost.nhn?directoryNo=28&activeDirectorySeq=3&currentPage=' + pageNum);
     pageNum++;
 
     setTimeout(loadData, 2000);
@@ -127,11 +127,12 @@ async function loadData() {
                 .getText().then(str => { return str; });
             if(element['date'].indexOf('시간 전') !== -1){
                 element['date'] = element['date'].replace("시간 전", "");
-                element['date'] = moment(today).subtract(element['date'], 'hours').format('YYYY.MM.DD');
+                element['date'] = moment(today).subtract(element['date'], 'hours').format('YYYY.MM.DD HH:') + '99';
             }else if(element['date'].indexOf('분 전') !== -1){
                 element['date'] = element['date'].replace("분 전", "");
-                element['date'] = moment(today).subtract(element['date'], 'minutes').format('YYYY.MM.DD');
+                element['date'] = moment(today).subtract(element['date'], 'minutes').format('YYYY.MM.DD HH:mm');
             }else{
+                console.error('!!날짜 처리 오류!!');
                 existCrawler();
                 return;
             }
@@ -158,7 +159,7 @@ async function loadData() {
 
             //파일을 넣기전에 중복파일인지 검사한다.
             if (element['url'] === overlapTodayURL || element['url'] === overlapYesterdayURL){
-                console.log('Exit 2');
+                console.log('중복되는 블로그 주소가 있어 종료합니다.');
                 existCrawler();
                 return;
             }

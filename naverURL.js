@@ -1,4 +1,4 @@
-//네이버 블로그 url 수집기
+//네이버 URL 수집기
 
 'use strict';
 
@@ -10,7 +10,81 @@ var moment = require('moment');
 moment.suppressDeprecationWarnings = true;
 var today = moment(new Date()).format('YYYY.MM.DD HH:mm');
 
-var pageNum = 1;
+function replaceAt(string, index, replace) {
+    return string.substring(0, index) + replace + string.substring(index + 1);
+}
+
+//월별 저장 폴더 체크 or 생성
+//없으면 생성한다.
+if(!fs.existsSync('./URL/' + moment(today).format('YYYYMM') )){
+    fs.mkdirSync('./URL/' + moment(today).format('YYYYMM'));
+}
+if(!fs.existsSync('./URL/' + moment(today).subtract(1, 'days').format('YYYYMM') )){
+    fs.mkdirSync('./URL/' + moment(today).subtract(1, 'days').format('YYYYMM'));
+}
+
+//다음에 url을 수집할때 중복 url을 빨리 찾울수 있도록 한다.
+var todayStartFlag = true;
+var yesterdayStartFlag = true;
+var isTodayFirst = false;
+var isYesterdayFitst = false;
+
+
+var tempFile;
+var overlapTodayURL;
+var overlapYesterdayURL;
+
+//오늘 파일
+var todayFilePath = './URL/' + moment(today).format('YYYYMM') + '/' + moment(today).format('YYYYMMDD') + '.json';
+var todayFile;
+if (fs.existsSync(todayFilePath)) {
+    //오늘 파일이 있으면
+    todayFile = fs.readFileSync(todayFilePath, 'utf8');
+    //끝 한줄 지우기
+    fs.writeFileSync(todayFilePath, replaceAt(todayFile, todayFile.length - 1, ""));
+    
+    tempFile = JSON.parse(todayFile);
+    for (var i = tempFile.length - 1; i >= 0; i--) {
+        if (tempFile[i].flag !== undefined) {
+            overlapTodayURL = tempFile[i].url;
+            console.log('overlap 1:', overlapTodayURL);
+            break;
+        }
+    }
+} else {
+    //오늘 파일이 없으면 새로 만들기
+    fs.writeFileSync(todayFilePath, '[\n', 'utf8');
+    //새로 넣을때 ,element...\n의 ','을 쓰지않는 플래그.
+    isTodayFirst = true;
+}
+
+//어제 파일
+var yesterdayFilePath = './URL/' + moment(today).subtract(1, 'days').format('YYYYMM') + '/' + moment(today).subtract(1, 'days').format('YYYYMMDD') + '.json';
+var yesterDayFile;
+if (fs.existsSync(yesterdayFilePath)) {
+    //어제 파일이 있으면
+    yesterDayFile = fs.readFileSync(yesterdayFilePath, 'utf8');
+    //끝 한줄 지우기
+    fs.writeFileSync(yesterdayFilePath, replaceAt(yesterDayFile, yesterDayFile.length - 1, ""));
+    
+    tempFile = JSON.parse(yesterDayFile);
+    for(var i = tempFile.length - 1; i >= 0; i--){
+        if(tempFile[i].flag === true){
+            overlapYesterdayURL = tempFile[i].url;
+            console.log('overlap 2:', overlapYesterdayURL);
+            break;
+        }
+    }
+} else {
+    //어제 파일이 없으면 새로 만들기
+    fs.writeFileSync(yesterdayFilePath, '[\n', 'utf8');
+    //새로 넣을때 ,element...\n의 ','을 쓰지않는 플래그.
+    isYesterdayFitst = true;
+}
+
+
+//페이지를 열어서 시작한다.
+var pageNum = 41;
 function openPage() {
     driver.get('https://section.blog.naver.com/ThemePost.nhn?directoryNo=27&activeDirectorySeq=3&currentPage=' + pageNum);
     pageNum++;
@@ -19,17 +93,22 @@ function openPage() {
 }
 openPage();
 
-var fileList = [];
 
 async function loadData() {
 
-    await driver.findElement(webdriver.By.xpath("//a[@aria-current='page']"))
-    .isDisplayed()
-    .then(()=>{
-    }).catch(()=>{
-        console.log('페이지 끝.');
-        programFin();
-    })
+    var isFin = await driver.findElement(webdriver.By.xpath("//a[@aria-current='page']"))
+        .isDisplayed()
+        .then(() => {
+            return false;
+        }).catch(() => {
+            console.log('페이지 끝.');
+            return true;
+        });
+
+    if(isFin){
+        existCrawler();
+        return;
+    }
 
     console.log('========================================');
 
@@ -43,11 +122,19 @@ async function loadData() {
             element['title'] = await driver.findElement(webdriver.By.xpath("//div[@ng-show=\"themePostCtrl.loaded\"]/div[" + index + "]/div/div[1]/div[1]/a[1]/strong"))
                 .getText().then(str => { return str; });
 
-            //날짜는 ~시간전 을 처리한다.
+            //날짜는 ~시간전, ~분 전 을 처리한다.
             element['date'] = await driver.findElement(webdriver.By.xpath("//div[@ng-show=\"themePostCtrl.loaded\"]/div[" + index + "]/div/div[1]/a[1]/div[2]/span"))
                 .getText().then(str => { return str; });
-            element['date'] = element['date'].replace("시간 전", "");
-            element['date'] = moment(today).subtract(element['date'], 'hours').format('YYYY.MM.DD');
+            if(element['date'].indexOf('시간 전') !== -1){
+                element['date'] = element['date'].replace("시간 전", "");
+                element['date'] = moment(today).subtract(element['date'], 'hours').format('YYYY.MM.DD');
+            }else if(element['date'].indexOf('분 전') !== -1){
+                element['date'] = element['date'].replace("분 전", "");
+                element['date'] = moment(today).subtract(element['date'], 'minutes').format('YYYY.MM.DD');
+            }else{
+                existCrawler();
+                return;
+            }
 
             element['name'] = await driver.findElement(webdriver.By.xpath("//div[@ng-show=\"themePostCtrl.loaded\"]/div[" + index + "]/div/div[1]/a[1]/div[2]/em"))
                 .getText().then(str => { return str; });
@@ -69,33 +156,58 @@ async function loadData() {
 
             console.log('blog:', element['title']);
 
-            var fileName = await moment(element['date']).format('YYYYMM') + '.json';
-            //처음 넣는다면
-            if (fileList.indexOf(fileName) === -1) {
-                await fileList.push(fileName);
-                fs.writeFileSync('./URL/' + fileName, '[\n' + JSON.stringify(element) + '\n', 'utf8');
-            }
-            //처음이 아닐경우
-            else {
-                fs.appendFileSync('./URL/' + fileName, ',' + JSON.stringify(element) + '\n', 'utf8');
+            //파일을 넣기전에 중복파일인지 검사한다.
+            if (element['url'] === overlapTodayURL || element['url'] === overlapYesterdayURL){
+                console.log('Exit 2');
+                existCrawler();
+                return;
             }
 
+                //날짜를 비교하여 어제파일, 오늘파일 중 맞는곳에 삽입한다.
+                if (moment(element['date']).isSame(moment(today).format('YYYY.MM.DD'))) {
+                    //오늘 날짜면
+                    if (todayStartFlag) {
+                        element['flag'] = true;
+                        todayStartFlag = false;
+                    }
+                    if(isTodayFirst){
+                        fs.appendFileSync(todayFilePath, JSON.stringify(element) + '\n', 'utf8');
+                        isTodayFirst = false;
+                    }else{
+                        fs.appendFileSync(todayFilePath, ',' + JSON.stringify(element) + '\n', 'utf8');
+                    }
+                } else {
+                    //어제 날짜면
+                    if (yesterdayStartFlag) {
+                        element['flag'] = true;
+                        yesterdayStartFlag = false;
+                    }
+                    if(isYesterdayFitst){
+                        fs.appendFileSync(yesterdayFilePath, JSON.stringify(element) + '\n', 'utf8');    
+                        isYesterdayFitst = false;
+                    }else{
+                        fs.appendFileSync(yesterdayFilePath, ',' + JSON.stringify(element) + '\n', 'utf8');
+                    }
+                }
+
         } catch (err) {
-            console.log(err);
+            //console.log(err);
             //10개 이하이므로 종료.
-            programFin();
-            break;
+            console.log('Exit 3');
+            console.log('10개 이하이므로 종료합니다.');
+            existCrawler();
+            return;
         }
     }
 
     setTimeout(openPage, 1500);
 }
 
-function programFin() {
-    var FileLen = fileList[fileList.length - 1];
-    fs.appendFileSync('./URL/' + FileLen, ']', 'utf8');
+async function existCrawler() {
+    fs.appendFileSync(todayFilePath, ']', 'utf8');
+    fs.appendFileSync(yesterdayFilePath, ']', 'utf8');
 
-    driver.close();
-    driver.quit();
+    await driver.close();
+    await driver.quit();
     process.exit();
 }
